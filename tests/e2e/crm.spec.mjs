@@ -1,0 +1,140 @@
+import { test, expect } from '@playwright/test';
+const dialog = page => page.locator('#dialog');
+const state = page => page.evaluate(() => window.designState());
+async function fits(page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if (await dialog(page).isVisible()) {
+    expect(await dialog(page).evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+}
+test('quatro percursos completos e simulações sem tráfego externo', async ({ page }, info) => {
+  const errors = [], external = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('request', req => { if (!req.url().startsWith('http://127.0.0.1:4190/')) external.push(req.url()); });
+  await page.goto('/');
+  await page.locator('#create-opportunity').click();
+  await page.locator('#op-company').fill('Jardim Comercial');
+  await page.locator('#op-contact').fill('Nina Exemplo');
+  await page.locator('#op-email').fill('nina@example.com');
+  await page.locator('#op-value').fill('7200');
+  await page.locator('#op-notes').fill('Primeiro contato fictício.');
+  await fits(page);
+  await page.getByRole('button', { name: 'Criar cartão fictício' }).click();
+  const id = (await state(page)).deals.at(-1).id;
+  await expect(dialog(page)).toContainText('nina@example.com');
+  await page.locator('#edit-opportunity').click();
+  await page.locator('#op-contact').fill('Nina Revisão');
+  await page.locator('#op-email').fill('nina.revisao@example.com');
+  await page.locator('#op-value').fill('7600');
+  await page.locator('#op-stage').selectOption('Qualificação');
+  await page.locator('#op-priority').selectOption('Alta');
+  await page.locator('#op-rx').selectOption('yes');
+  await page.getByRole('button', { name: 'Salvar alterações locais' }).click();
+  expect((await state(page)).deals.find(d => d.id === id)).toMatchObject({ value: 7600, priority: 'Alta', rx: true });
+  await page.locator('#locate-opportunity').click();
+  await expect(page.locator('.deal')).toHaveCount(1);
+  await expect(page.locator('[data-lane="Qualificação"] .deal')).toContainText('Nina Revisão');
+  await page.locator('[data-open]').click();
+  await page.locator('#link-product').click();
+  await page.locator('#create-product-from-deal').click();
+  await page.locator('#new-product-name').fill('Diagnóstico de expansão');
+  await page.locator('#new-product-code').fill('demo-001');
+  await page.getByRole('button', { name: 'Cadastrar e vincular no exemplo' }).click();
+  await expect(page.locator('#product-error')).toContainText('Já existe');
+  await expect(page.locator('#new-product-name')).toHaveValue('Diagnóstico de expansão');
+  await page.locator('#new-product-code').fill('DEMO-004');
+  await page.getByRole('button', { name: 'Cadastrar e vincular no exemplo' }).click();
+  await expect(dialog(page)).toContainText('Jardim Comercial');
+  await expect(dialog(page)).toContainText('DEMO-004');
+  await fits(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Atividades', exact: true }).click();
+  await page.locator('#task-search').fill('DEMO-101');
+  await page.locator('[data-task]').click();
+  await page.locator('#schedule-from-task').click();
+  await expect(page.locator('#meeting-lead')).toHaveValue('marina@example.com');
+  await page.locator('#meeting-member').selectOption('Saulo Alves');
+  await page.locator('#meeting-time').fill('15:30');
+  await fits(page);
+  await page.getByRole('button', { name: 'Revisar convite fictício' }).click();
+  await expect(dialog(page)).toContainText('saulo@example.com');
+  await expect(dialog(page)).toContainText('DEMO-101');
+  await page.locator('#edit-meeting').click();
+  await expect(page.locator('#meeting-member')).toHaveValue('Saulo Alves');
+  await expect(page.locator('#meeting-time')).toHaveValue('15:30');
+  await page.getByRole('button', { name: 'Revisar convite fictício' }).click();
+  await page.locator('#confirm-meeting').click();
+  await expect(page.locator('#task-meeting-result')).toContainText('Nenhum convite real');
+  expect((await state(page)).tasks.find(t => t.id === 'DEMO-101').status).toBe('Pendente');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Segmentos', exact: true }).click();
+  await page.locator('#prepare-campaign').click();
+  await expect(dialog(page)).toContainText('Reunião já marcada');
+  await expect(dialog(page)).toContainText('Bloqueio de contato');
+  await expect(page.locator('#campaign-next')).toBeDisabled();
+  await page.locator(`[data-campaign-person="${id}"]`).uncheck();
+  await page.locator('#campaign-audience-reviewed').check();
+  await page.locator('#campaign-next').click();
+  await page.locator('#campaign-text').fill('Olá, {contato}. Vamos falar sobre {empresa}?');
+  await page.locator('#campaign-text-approved').check();
+  await page.locator('#campaign-text').fill('Olá, {contato}. Vamos falar sobre {empresa}? Obrigado.');
+  await expect(page.locator('#campaign-text-approved')).not.toBeChecked();
+  await expect(page.locator('#campaign-preview')).toBeDisabled();
+  await page.locator('#campaign-text-approved').check();
+  await page.locator('#campaign-preview').click();
+  await expect(dialog(page)).toContainText('não enfileirada');
+  expect((await state(page)).campaign.queue).toMatchObject([{ deal: 'd3', text: 'Olá, Clara Exemplo. Vamos falar sobre Vale Verde Serviços? Obrigado.' }]);
+  await fits(page);
+  await page.screenshot({ path: `test-results/${info.project.name}-campanha.png`, fullPage: true });
+  await page.locator('#campaign-edit-public').click();
+  await expect(page.locator('#campaign-next')).toBeDisabled();
+  expect((await state(page)).campaign.approved).toBe(false);
+  expect(external).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('todas as áreas, filtros, dashboard salvo e perfil de consulta', async ({ page }, info) => {
+  await page.goto('/');
+  for (const area of ['funis', 'atividades', 'catalogo', 'sdr', 'segmentos', 'ajustes', 'insights']) {
+    await page.goto('/#' + area);
+    await expect(page.locator('#content')).not.toBeEmpty();
+    await fits(page);
+    await page.screenshot({ path: `test-results/${info.project.name}-${area}.png`, fullPage: true });
+  }
+  await page.goto('/#funis');
+  await page.locator('[data-filters]').first().click();
+  await page.locator('#add-rule').click();
+  await page.locator('[data-rule-field="1"]').selectOption('rx');
+  await fits(page);
+  await page.locator('#apply-filter').click();
+  expect((await state(page)).visible).toEqual(['d1', 'd3', 'd4']);
+  await page.locator('[data-save-insights]').click();
+  await page.locator('#dashboard-name').fill('Raio X · teste local');
+  await page.locator('#dashboard-metric').selectOption('count');
+  await page.getByRole('button', { name: 'Salvar dashboard no exemplo' }).click();
+  await expect(page.locator('#content')).toContainText('Raio X · teste local');
+  await page.locator('[data-dashboard-funnel]').click();
+  expect((await state(page)).visible).toEqual(['d1', 'd3', 'd4']);
+  await page.locator('#profile').selectOption('reader');
+  await expect(page.locator('#create-opportunity')).toHaveCount(0);
+  await expect(page.locator('[data-config-funnel]')).toBeHidden();
+});
+
+test('teclado: abrir, tabular, Escape, restaurar foco e mover pela ficha', async ({ page }) => {
+  await page.goto('/');
+  const card = page.locator('[data-open="d1"]');
+  await card.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog(page)).toBeVisible();
+  for (let i = 0; i < 18; i++) {
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.querySelector('dialog').contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(card).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.locator('#move-deal').click();
+  await page.locator('#move-stage').selectOption('Proposta');
+  await page.locator('#confirm-move').click();
+  expect((await state(page)).deals.find(d => d.id === 'd1').stage).toBe('Proposta');
+});

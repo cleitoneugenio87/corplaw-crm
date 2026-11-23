@@ -1,0 +1,7 @@
+(()=>{const q=s=>document.querySelector(s),check=(name,ok)=>{flowChecks.push({name,pass:!!ok});if(!ok)throw Error(name);};try{
+q('[data-open]').click();q('#link-product').click();q('#create-product-from-deal').click();q('#new-product-name').value='Diagnóstico de expansão · fictício';q('#new-product-code').value='DEMO-001';q('#new-product-category').value='Consultivo';q('#new-product-center').value='Consultivo empresarial';q('#product-form').requestSubmit();
+check('Duplicate code shown without losing form context',q('#product-error').textContent.includes('Já existe')&&q('#new-product-name').value==='Diagnóstico de expansão · fictício'&&q('dialog').textContent.includes('Jardim Comercial'));
+q('#new-product-code').value='DEMO-004';q('#product-form').requestSubmit();const state=designState(),d=state.deals.find(d=>d.id===flowDealId),p=state.products.find(p=>p.id===d.product);
+check('Product created with name code category and center',p.name==='Diagnóstico de expansão · fictício'&&p.code==='DEMO-004'&&p.category==='Consultivo'&&p.center==='Consultivo empresarial');
+check('Return to same opportunity with product linked',q('dialog').textContent.includes('Jardim Comercial · revisão')&&q('dialog').textContent.includes('DEMO-004')&&!q('dialog').textContent.includes('Produto ausente nesta oportunidade'));
+return {passed:true,phase:2,checks:flowChecks};}catch(e){return {passed:false,error:String(e),checks:flowChecks};}})()

@@ -1,0 +1,27 @@
+/* Ajustes de acessibilidade e contenção sobre o desenho final aprovado. */
+html { scroll-padding-top: 20px; }
+body:has(dialog[open]) { overflow: hidden; }
+.workspace, #content, .panel, .toolbar > *, .dialog-head > div { min-width: 0; }
+.dialog-head h2, .notice, .config-row, .panel-head, .filterchip { overflow-wrap: anywhere; }
+.config-row, .panel-head { flex-wrap: wrap; }
+.board { grid-template-columns: repeat(var(--lane-count, 4), minmax(230px, 1fr)); overflow-x: auto; }
+.close { min-width: 44px; min-height: 44px; }
+#dialog-title:focus { outline: none; }
+.demo a { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .board { overflow: visible; }
+  .topbar { gap: 8px; }
+  .role { min-width: 0; gap: 6px; }
+  .role select { width: 100%; min-width: 0; max-width: 150px; }
+  .role > .avatar { display: none; }
+  .demo { align-items: flex-start; flex-wrap: wrap; }
+  .tabs { scrollbar-width: thin; }
+  .tabs button { min-height: 44px; }
+  .dialog-head { gap: 10px; }
+  .definition { grid-template-columns: 1fr; }
+  .dialog-footer .btn { flex-basis: 100%; }
+  .board-summary { flex-wrap: wrap; }
+  .bar-row { grid-template-columns: minmax(65px, 1fr) minmax(25px, 1fr) auto; gap: 8px; }
+  .flow-steps { flex-wrap: wrap; }
+  .flow-steps li { min-width: 60px; }
+}
